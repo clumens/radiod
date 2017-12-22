@@ -1,0 +1,12 @@
+#!/bin/sh
+# The device node for a radio might appear after the power supply is
+# turned on but before the radio itself is turned on.  Thus we need to
+# give the user some time to press the button and the radio to start
+# up and be ready for commands.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 1
+    timeout 2s rigctl $* f 1>&- 2>&-
+    if [ $? -eq 0 ]; then
+        exec rigctld $*
+    fi
+done

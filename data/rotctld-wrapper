@@ -1,0 +1,11 @@
+#!/bin/sh
+# Give the rotor time to be turned on and ready to accept commands
+# before starting up rotctld.  This is just in case the device node
+# appears immediately, but the rotor itself is not yet ready.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 1
+    timeout 2s rotctl $* p 1>&- 2>&-
+    if [ $? -eq 0 ]; then
+        exec rotctld $*
+    fi
+done

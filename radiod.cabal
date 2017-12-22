@@ -1,0 +1,29 @@
+name:                radiod
+version:             1
+synopsis:            Watch for radios to appear and take action
+license:             GPL-3
+license-file:        LICENSE
+author:              Chris Lumens
+maintainer:          chris@bangmoney.org
+category:            System
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+cabal-version:       >= 1.10
+
+extra-source-files:  data/radiod.conf,
+                     data/rigctld-wrapper,
+                     data/rotctld-wrapper
+
+executable radiod
+  main-is:           Main.hs
+  build-depends:     base >= 4.9 && < 4.10,
+                     containers,
+                     directory,
+                     filepath,
+                     hinotify,
+                     process,
+                     unix
+
+  other-modules:     Paths_radiod
+
+  default-language:  Haskell2010
