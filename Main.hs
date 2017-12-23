@@ -18,7 +18,7 @@ import           System.IO(IOMode(..), hFlush, stdin, stdout, withFile)
 import           System.Posix.Files(setFileCreationMask, stdFileMode)
 import           System.Posix.IO
 import           System.Posix.Process(createSession, forkProcess)
-import           System.Posix.Signals(Handler(..), installHandler, sigHUP)
+import           System.Posix.Signals(Handler(..), installHandler, sigCHLD, sigHUP)
 import           System.Posix.User(getEffectiveUserID)
 import           System.Process(ProcessHandle, spawnProcess, terminateProcess)
 
@@ -161,7 +161,8 @@ program = do
     inotify <- initINotify
 
     void $ do
-        installHandler sigHUP (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
+        installHandler sigCHLD Ignore Nothing
+        installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
 
         addWatch inotify [Create, Delete] "/dev" (handler procMap devMap)
         forever $
