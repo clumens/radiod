@@ -4,21 +4,22 @@
 module Main where
 
 import           Control.Concurrent(threadDelay)
-import           Control.Monad(forM_, forever, unless, void)
+import           Control.Concurrent.MVar(MVar, newEmptyMVar, putMVar, tryTakeMVar)
+import           Control.Monad(forM_, forever, unless, void, when)
 import           Data.Char(isSpace, toUpper)
 import           Data.IORef(IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.List(dropWhileEnd)
 import qualified Data.Map as Map
 import           Data.Maybe(isNothing, mapMaybe)
-import           System.Directory(setCurrentDirectory , doesFileExist)
+import           System.Directory(setCurrentDirectory , doesFileExist, removeFile)
 import           System.Exit(exitFailure)
 import           System.FilePath((</>))
 import           System.INotify
 import           System.IO(IOMode(..), hFlush, stdin, stdout, withFile)
 import           System.Posix.Files(setFileCreationMask, stdFileMode)
 import           System.Posix.IO
-import           System.Posix.Process(createSession, forkProcess)
-import           System.Posix.Signals(Handler(..), installHandler, sigCHLD, sigHUP)
+import           System.Posix.Process(createSession, forkProcess, getProcessID)
+import           System.Posix.Signals(Handler(..), installHandler, sigCHLD, sigHUP, sigTERM)
 import           System.Posix.User(getEffectiveUserID)
 import           System.Process(ProcessHandle, spawnProcess, terminateProcess)
 
@@ -154,6 +155,11 @@ reconnectHandles = do
 -- MAIN PROGRAM
 --
 
+loop :: MVar () -> IO ()
+loop v = tryTakeMVar v >>= \case
+    Just _  -> return ()
+    Nothing -> threadDelay 1000000 >> loop v
+
 program :: IO ()
 program = do
     devMap  <- loadConfigFile >>= newIORef
@@ -161,18 +167,25 @@ program = do
     inotify <- initINotify
 
     void $ do
+        v <- newEmptyMVar
+
         installHandler sigCHLD Ignore Nothing
         installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
+        installHandler sigTERM (CatchOnce $ putMVar v ()) Nothing
 
         addWatch inotify [Create, Delete] "/dev" (handler procMap devMap)
-        forever $
-            threadDelay 1000000
+        loop v
 
 main :: IO ()
 main = do
     uid <- getEffectiveUserID
     unless (uid == 0) $ do
         putStrLn "This program must be run as root."
+        exitFailure
+
+    exists <- doesFileExist "/var/run/radiod.run"
+    when exists $ do
+        putStrLn "radiod is already running."
         exitFailure
 
     -- TODO: Close open file descriptors.
@@ -186,6 +199,12 @@ main = do
     void $ forkProcess $ do
         createSession
         void $ forkProcess $ do
+            -- Write a PID file.  There's a short window between here and where we
+            -- check to see if the file already exists, but I don't expect this
+            -- to be a very popular program so whatever.
+            pid <- getProcessID
+            writeFile "/var/run/radiod.run" (show pid ++ "\n")
+
             -- Connect /dev/null to stdin, stdout, and stderr
             reconnectHandles
 
@@ -197,3 +216,7 @@ main = do
 
             -- Finally, run the real program.
             program
+
+            -- When 'program' returns, we'll have gotten a SIGTERM (or something), so
+            -- it's time to clean up.
+            removeFile "/var/run/radiod.run"
