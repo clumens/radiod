@@ -10,7 +10,9 @@ build-type:          Simple
 extra-source-files:  ChangeLog.md
 cabal-version:       >= 1.10
 
-extra-source-files:  data/radiod.conf,
+extra-source-files:  ChangeLog.md,
+                     README.md,
+                     data/radiod.conf,
                      data/rigctld-wrapper,
                      data/rotctld-wrapper
 
