@@ -19,10 +19,11 @@ extra-source-files:  ChangeLog.md,
 executable radiod
   main-is:           Main.hs
   build-depends:     base >= 4.9 && < 4.10,
+                     bytestring,
                      containers,
                      directory,
                      filepath,
-                     hinotify,
+                     hinotify >= 0.3.10,
                      process,
                      unix
 

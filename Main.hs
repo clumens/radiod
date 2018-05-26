@@ -1,11 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
 import           Control.Concurrent(threadDelay)
 import           Control.Concurrent.MVar(MVar, newEmptyMVar, putMVar, tryTakeMVar)
 import           Control.Monad(forM_, forever, unless, void, when)
+import qualified Data.ByteString.Char8 as C8
 import           Data.Char(isSpace, toUpper)
 import           Data.IORef(IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.List(dropWhileEnd)
@@ -108,7 +110,7 @@ stopRotctld = terminateProcess
 handler :: IORef ProcMap -> IORef DeviceMap -> Event -> IO ()
 handler procRef devRef Created{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
-    let fp' = "/dev" </> fp
+    let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup fp' devMap of
         Just (Rig ty port) -> do h <- startRigctld fp' ty port
@@ -119,7 +121,7 @@ handler procRef devRef Created{isDirectory=False, filePath=fp} = do
 
 handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
-    let fp' = "/dev" </> fp
+    let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup fp' devMap of
         Just (Rig ty port) -> do procMap <- readIORef procRef
