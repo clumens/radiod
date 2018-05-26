@@ -1,5 +1,5 @@
 name:                radiod
-version:             1
+version:             2
 synopsis:            Watch for radios to appear and take action
 license:             GPL-3
 license-file:        LICENSE
