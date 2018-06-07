@@ -23,7 +23,7 @@ import           System.Posix.IO
 import           System.Posix.Process(createSession, forkProcess, getProcessID)
 import           System.Posix.Signals(Handler(..), installHandler, sigCHLD, sigHUP, sigTERM)
 import           System.Posix.User(getEffectiveUserID)
-import           System.Process(ProcessHandle, spawnProcess, terminateProcess)
+import           System.Process.Typed(Process, proc, startProcess, stopProcess)
 import           Text.Read(readMaybe)
 
 import Paths_radiod(getLibexecDir, getSysconfDir)
@@ -34,7 +34,7 @@ data Device = Rig Integer (Maybe Integer)
 
 type DeviceMap = Map.Map T.Text Device
 
-type ProcMap   = Map.Map T.Text ProcessHandle
+type ProcMap   = Map.Map T.Text (Process () () ())
 
 --
 -- CONFIG FILE
@@ -79,27 +79,29 @@ loadConfigFile = do
 -- RIGCTLD CONTROL
 --
 
-startRigctld :: FilePath -> Integer -> Maybe Integer -> IO ProcessHandle
+startRigctld :: FilePath -> Integer -> Maybe Integer -> IO (Process () () ())
 startRigctld dev ty port = do
     dir <- getLibexecDir
-    let args = ["-m", show ty, "-r", dev] ++ maybe [] (\p -> ["-t", show p]) port
-    spawnProcess (dir </> "rigctld-wrapper") args
+    let fp   = dir </> "rigctld-wrapper"
+        args = ["-m", show ty, "-r", dev] ++ maybe [] (\p -> ["-t", show p]) port
+    startProcess (proc fp args)
 
-stopRigctld :: ProcessHandle -> IO ()
-stopRigctld = terminateProcess
+stopRigctld :: Process stdin stdout stderr -> IO ()
+stopRigctld = stopProcess
 
 --
 -- ROTCTLD CONTROL
 --
 
-startRotctld :: FilePath -> Integer -> Maybe Integer -> IO ProcessHandle
+startRotctld :: FilePath -> Integer -> Maybe Integer -> IO (Process () () ())
 startRotctld dev ty port = do
     dir <- getLibexecDir
-    let args = ["-m", show ty, "-r", dev] ++ maybe [] (\p -> ["-t", show p]) port
-    spawnProcess (dir </> "rotctld-wrapper") args
+    let fp   = dir </> "rotctld-wrapper"
+        args = ["-m", show ty, "-r", dev] ++ maybe [] (\p -> ["-t", show p]) port
+    startProcess (proc fp args)
 
-stopRotctld :: ProcessHandle -> IO ()
-stopRotctld = terminateProcess
+stopRotctld :: Process stdin stdout stderr -> IO ()
+stopRotctld = stopProcess
 
 --
 -- INOTIFY STUFF

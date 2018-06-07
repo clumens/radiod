@@ -24,12 +24,12 @@ executable radiod
                      directory,
                      filepath,
                      hinotify >= 0.3.10,
-                     process,
                      text,
+                     typed-process >= 0.2.1.0 && < 0.3.0.0,
                      unix
 
   other-modules:     Paths_radiod
 
   default-language:  Haskell2010
 
-  ghc-options:       -Wall
+  ghc-options:       -Wall -threaded
