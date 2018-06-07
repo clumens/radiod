@@ -6,20 +6,18 @@ module Main where
 
 import           Control.Concurrent(threadDelay)
 import           Control.Concurrent.MVar(MVar, newEmptyMVar, putMVar, tryTakeMVar)
-import           Control.Monad(forM_, forever, unless, void, when)
+import           Control.Monad(unless, void, when)
 import qualified Data.ByteString.Char8 as C8
-import           Data.Char(isSpace, toUpper)
 import           Data.IORef(IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
-import           Data.List(dropWhileEnd)
 import qualified Data.Map as Map
-import           Data.Maybe(isNothing, mapMaybe)
+import           Data.Maybe(mapMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import           System.Directory(setCurrentDirectory , doesFileExist, removeFile)
 import           System.Exit(exitFailure)
 import           System.FilePath((</>))
 import           System.INotify
-import           System.IO(IOMode(..), hFlush, stdin, stdout, withFile)
+import           System.IO(hFlush, stdout)
 import           System.Posix.Files(setFileCreationMask, stdFileMode)
 import           System.Posix.IO
 import           System.Posix.Process(createSession, forkProcess, getProcessID)
@@ -132,17 +130,17 @@ handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig ty port) -> do procMap <- readIORef procRef
-                                 case Map.lookup (T.pack fp') procMap of
-                                     Nothing -> return ()
-                                     Just h  -> do stopRigctld h
-                                                   delete procRef (T.pack fp')
-        Just (Rot ty port) -> do procMap <- readIORef procRef
-                                 case Map.lookup (T.pack fp') procMap of
-                                     Nothing -> return ()
-                                     Just h  -> do stopRotctld h
-                                                   delete procRef (T.pack fp')
-        _                  -> return ()
+        Just (Rig _ _) -> do procMap <- readIORef procRef
+                             case Map.lookup (T.pack fp') procMap of
+                                 Nothing -> return ()
+                                 Just h  -> do stopRigctld h
+                                               delete procRef (T.pack fp')
+        Just (Rot _ _) -> do procMap <- readIORef procRef
+                             case Map.lookup (T.pack fp') procMap of
+                                 Nothing -> return ()
+                                 Just h  -> do stopRotctld h
+                                               delete procRef (T.pack fp')
+        _              -> return ()
 
 handler _ _ _ = return ()
 
@@ -179,11 +177,11 @@ program = do
     void $ do
         v <- newEmptyMVar
 
-        installHandler sigCHLD Ignore Nothing
-        installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
-        installHandler sigTERM (CatchOnce $ putMVar v ()) Nothing
+        void $ installHandler sigCHLD Ignore Nothing
+        void $ installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
+        void $ installHandler sigTERM (CatchOnce $ putMVar v ()) Nothing
 
-        addWatch inotify [Create, Delete] "/dev" (handler procMap devMap)
+        void $ addWatch inotify [Create, Delete] "/dev" (handler procMap devMap)
         loop v
 
 main :: IO ()
@@ -207,7 +205,7 @@ main = do
     -- Do the double fork thing so we can't get a terminal again.
     -- Also create an independent session in the middle.
     void $ forkProcess $ do
-        createSession
+        void $ createSession
         void $ forkProcess $ do
             -- Write a PID file.  There's a short window between here and where we
             -- check to see if the file already exists, but I don't expect this
