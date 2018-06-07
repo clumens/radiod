@@ -25,6 +25,7 @@ executable radiod
                      filepath,
                      hinotify >= 0.3.10,
                      process,
+                     text,
                      unix
 
   other-modules:     Paths_radiod

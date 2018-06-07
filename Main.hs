@@ -13,6 +13,8 @@ import           Data.IORef(IORef, atomicModifyIORef, atomicWriteIORef, newIORef
 import           Data.List(dropWhileEnd)
 import qualified Data.Map as Map
 import           Data.Maybe(isNothing, mapMaybe)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import           System.Directory(setCurrentDirectory , doesFileExist, removeFile)
 import           System.Exit(exitFailure)
 import           System.FilePath((</>))
@@ -24,6 +26,7 @@ import           System.Posix.Process(createSession, forkProcess, getProcessID)
 import           System.Posix.Signals(Handler(..), installHandler, sigCHLD, sigHUP, sigTERM)
 import           System.Posix.User(getEffectiveUserID)
 import           System.Process(ProcessHandle, spawnProcess, terminateProcess)
+import           Text.Read(readMaybe)
 
 import Paths_radiod(getLibexecDir, getSysconfDir)
 
@@ -31,48 +34,45 @@ data Device = Rig Integer (Maybe Integer)
             | Rot Integer (Maybe Integer)
  deriving(Eq, Show)
 
-type DeviceMap = Map.Map String Device
+type DeviceMap = Map.Map T.Text Device
 
-type ProcMap   = Map.Map String ProcessHandle
+type ProcMap   = Map.Map T.Text ProcessHandle
 
 --
 -- CONFIG FILE
 --
 
--- TODO:  This should support blank lines and comments.
-parseConfigFile :: String -> DeviceMap
-parseConfigFile str | strs <- lines str =
+parseConfigFile :: T.Text -> DeviceMap
+parseConfigFile str | strs <- T.lines str =
     Map.fromList $ mapMaybe parseOneLine strs
  where
-    stringToInt :: String -> Maybe Integer
-    stringToInt s = case reads s of
-        [(val, "")] -> Just val
-        _           -> Nothing
-
-    uppercase :: String -> String
-    uppercase = map toUpper
-
-    parseOneRig :: [String] -> Maybe (String, Device)
-    parseOneRig l = stringToInt (l !! 2) >>= \ty -> do
-        let port = stringToInt (l !! 3)
+    parseOneRig :: [T.Text] -> Maybe (T.Text, Device)
+    parseOneRig l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
+        let port = readMaybe (T.unpack $ l !! 3)
         Just (head l, Rig ty port)
 
-    parseOneRotor :: [String] -> Maybe (String, Device)
-    parseOneRotor l = stringToInt (l !! 2) >>= \ty -> do
-        let port = stringToInt (l !! 3)
+    parseOneRotor :: [T.Text] -> Maybe (T.Text, Device)
+    parseOneRotor l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
+        let port = readMaybe (T.unpack $ l !! 3)
         Just (head l, Rot ty port)
 
-    parseOneLine :: String -> Maybe (String, Device)
-    parseOneLine l | l <- words l =
-        if | length l == 4 && uppercase (l !! 1) == "RIG"   -> parseOneRig l
-           | length l == 4 && uppercase (l !! 1) == "ROTOR" -> parseOneRotor l
-           | otherwise -> Nothing
+    parseOneLine :: T.Text -> Maybe (T.Text, Device)
+    parseOneLine input = let
+        stripped = T.strip input
+     in
+        if T.null stripped || "#" `T.isPrefixOf` stripped then Nothing
+        else let
+            l = T.words stripped
+         in
+            if | length l == 4 && T.toUpper (l !! 1) == "RIG"   -> parseOneRig l
+               | length l == 4 && T.toUpper (l !! 1) == "ROTOR" -> parseOneRotor l
+               | otherwise -> Nothing
 
 loadConfigFile :: IO DeviceMap
 loadConfigFile = do
     dir <- getSysconfDir
     c   <- doesFileExist (dir </> "radiod.conf") >>= \case
-               True  -> readFile (dir </> "radiod.conf")
+               True  -> TIO.readFile (dir </> "radiod.conf")
                False -> return ""
 
     return $ parseConfigFile c
@@ -112,28 +112,28 @@ handler procRef devRef Created{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
     let fp' = "/dev" </> C8.unpack fp
 
-    case Map.lookup fp' devMap of
+    case Map.lookup (T.pack fp') devMap of
         Just (Rig ty port) -> do h <- startRigctld fp' ty port
-                                 atomicModifyIORef procRef (\m -> (Map.insert fp' h m, ()))
+                                 atomicModifyIORef procRef (\m -> (Map.insert (T.pack fp') h m, ()))
         Just (Rot ty port) -> do h <- startRotctld fp' ty port
-                                 atomicModifyIORef procRef (\m -> (Map.insert fp' h m, ()))
+                                 atomicModifyIORef procRef (\m -> (Map.insert (T.pack fp') h m, ()))
         _                  -> return ()
 
 handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
     let fp' = "/dev" </> C8.unpack fp
 
-    case Map.lookup fp' devMap of
+    case Map.lookup (T.pack fp') devMap of
         Just (Rig ty port) -> do procMap <- readIORef procRef
-                                 case Map.lookup fp' procMap of
+                                 case Map.lookup (T.pack fp') procMap of
                                      Nothing -> return ()
                                      Just h  -> do stopRigctld h
-                                                   atomicModifyIORef procRef (\m -> (Map.delete fp' m, ()))
+                                                   atomicModifyIORef procRef (\m -> (Map.delete (T.pack fp') m, ()))
         Just (Rot ty port) -> do procMap <- readIORef procRef
-                                 case Map.lookup fp' procMap of
+                                 case Map.lookup (T.pack fp') procMap of
                                      Nothing -> return ()
                                      Just h  -> do stopRotctld h
-                                                   atomicModifyIORef procRef (\m -> (Map.delete fp' m, ()))
+                                                   atomicModifyIORef procRef (\m -> (Map.delete (T.pack fp') m, ()))
         _                  -> return ()
 
 handler _ _ _ = return ()
