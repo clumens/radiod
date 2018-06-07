@@ -107,6 +107,14 @@ stopRotctld = terminateProcess
 -- INOTIFY STUFF
 --
 
+insert :: Ord k => IORef (Map.Map k a) -> k -> a -> IO ()
+insert ref key val =
+    atomicModifyIORef ref (\m -> (Map.insert key val m, ()))
+
+delete :: Ord k => IORef (Map.Map k a) -> k -> IO ()
+delete ref key =
+    atomicModifyIORef ref (\m -> (Map.delete key m, ()))
+
 handler :: IORef ProcMap -> IORef DeviceMap -> Event -> IO ()
 handler procRef devRef Created{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
@@ -114,9 +122,9 @@ handler procRef devRef Created{isDirectory=False, filePath=fp} = do
 
     case Map.lookup (T.pack fp') devMap of
         Just (Rig ty port) -> do h <- startRigctld fp' ty port
-                                 atomicModifyIORef procRef (\m -> (Map.insert (T.pack fp') h m, ()))
+                                 insert procRef (T.pack fp') h
         Just (Rot ty port) -> do h <- startRotctld fp' ty port
-                                 atomicModifyIORef procRef (\m -> (Map.insert (T.pack fp') h m, ()))
+                                 insert procRef (T.pack fp') h
         _                  -> return ()
 
 handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
@@ -128,12 +136,12 @@ handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
                                  case Map.lookup (T.pack fp') procMap of
                                      Nothing -> return ()
                                      Just h  -> do stopRigctld h
-                                                   atomicModifyIORef procRef (\m -> (Map.delete (T.pack fp') m, ()))
+                                                   delete procRef (T.pack fp')
         Just (Rot ty port) -> do procMap <- readIORef procRef
                                  case Map.lookup (T.pack fp') procMap of
                                      Nothing -> return ()
                                      Just h  -> do stopRotctld h
-                                                   atomicModifyIORef procRef (\m -> (Map.delete (T.pack fp') m, ()))
+                                                   delete procRef (T.pack fp')
         _                  -> return ()
 
 handler _ _ _ = return ()
