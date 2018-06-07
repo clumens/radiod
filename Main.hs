@@ -46,12 +46,12 @@ parseConfigFile str | strs <- T.lines str =
  where
     parseOneRig :: [T.Text] -> Maybe (T.Text, Device)
     parseOneRig l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = readMaybe (T.unpack $ l !! 3)
+        let port = if length l > 3 then readMaybe (T.unpack $ l !! 3) else Nothing
         Just (head l, Rig ty port)
 
     parseOneRotor :: [T.Text] -> Maybe (T.Text, Device)
     parseOneRotor l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = readMaybe (T.unpack $ l !! 3)
+        let port = if length l > 3 then readMaybe (T.unpack $ l !! 3) else Nothing
         Just (head l, Rot ty port)
 
     parseOneLine :: T.Text -> Maybe (T.Text, Device)
@@ -60,11 +60,11 @@ parseConfigFile str | strs <- T.lines str =
      in
         if T.null stripped || "#" `T.isPrefixOf` stripped then Nothing
         else let
-            l = T.words stripped
+            l = T.split (== ',') stripped
          in
-            if | length l == 4 && T.toUpper (l !! 1) == "RIG"   -> parseOneRig l
-               | length l == 4 && T.toUpper (l !! 1) == "ROTOR" -> parseOneRotor l
-               | otherwise -> Nothing
+            if | length l >= 3 && T.toUpper (l !! 1) == "RIG"   -> parseOneRig l
+               | length l >= 3 && T.toUpper (l !! 1) == "ROTOR" -> parseOneRotor l
+               | otherwise                                      -> Nothing
 
 loadConfigFile :: IO DeviceMap
 loadConfigFile = do

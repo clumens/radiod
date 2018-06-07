@@ -40,10 +40,7 @@ meaningful symlinks.  I recommend you do the same.  For example, I have this in
 Then I don't need to remember which real device node (/dev/ttyUSB0?  USB1?) it
 gets assigned to.  It's always the same thing.
 
-Having done that, you then need to modify /etc/radiod.conf.  The parser for this
-config file is fairly stupid and does not handle comments, blank lines, or spaces
-at the beginning of a lines.  This is because writing config file parsers is
-boring.  I'll get to it eventually.
+Having done that, you then need to modify /etc/radiod.conf.
 
 You can have as many lines as you'd like.  radiod will watch for all of them to
 appear, only running something for those that do.  There is one trick to watching
@@ -62,11 +59,11 @@ are the only two types of things understood.
 rotctld.  Use `rigctld -l` and `rotctld -l` to figure out which matches your
 device.
 
-* The port number to use, or a dash if the default.  If you only have one radio
-or one rotor hooked up, you can just use a dash.  Once multiple are attached and
-could be present at the same time, you will need to specify this.  rigctld
-suggests using even ports starting with 4532, and rotctld suggests using odd
-ports starting with 4533.  Remember this number for later.
+* The port number to use, or nothing if the default.  If you only have one radio
+or one rotor hooked up, you can leave this column blank.  Once multiple are attached
+and could be present at the same time, you will need to specify this.  rigctld
+suggests using even ports starting with 4532, and rotctld suggests using odd ports
+starting with 4533.  Remember this number for later.
 
 You'll also need to configure whatever loggers or digital mode programs or other
 radio software you use to talk to rigctld instead of using the device directly.
