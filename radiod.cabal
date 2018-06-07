@@ -24,6 +24,7 @@ executable radiod
                      directory,
                      filepath,
                      hinotify >= 0.3.10,
+                     safe >= 0.3.16 && < 0.4.0,
                      text,
                      typed-process >= 0.2.1.0 && < 0.3.0.0,
                      unix

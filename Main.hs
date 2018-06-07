@@ -13,6 +13,7 @@ import qualified Data.Map as Map
 import           Data.Maybe(mapMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import           Safe(atMay)
 import           System.Directory(setCurrentDirectory , doesFileExist, removeFile)
 import           System.Exit(exitFailure)
 import           System.FilePath((</>))
@@ -46,12 +47,12 @@ parseConfigFile str | strs <- T.lines str =
  where
     parseOneRig :: [T.Text] -> Maybe (T.Text, Device)
     parseOneRig l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = if length l > 3 then readMaybe (T.unpack $ l !! 3) else Nothing
+        let port = atMay l 3 >>= Just . T.unpack >>= readMaybe
         Just (head l, Rig ty port)
 
     parseOneRotor :: [T.Text] -> Maybe (T.Text, Device)
     parseOneRotor l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = if length l > 3 then readMaybe (T.unpack $ l !! 3) else Nothing
+        let port = atMay l 3 >>= Just . T.unpack >>= readMaybe
         Just (head l, Rot ty port)
 
     parseOneLine :: T.Text -> Maybe (T.Text, Device)
