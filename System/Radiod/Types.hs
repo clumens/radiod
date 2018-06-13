@@ -1,4 +1,5 @@
 module System.Radiod.Types(Device(..),
+                           DeviceInfo,
                            DeviceMap,
                            ProcMap)
  where
@@ -10,6 +11,8 @@ import           System.Process.Typed(Process)
 data Device = Rig Integer (Maybe Integer)
             | Rot Integer (Maybe Integer)
  deriving(Eq, Show)
+
+type DeviceInfo = (String, Integer)
 
 type DeviceMap = Map.Map T.Text Device
 
