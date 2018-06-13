@@ -170,28 +170,28 @@ handler procRef devRef Created{isDirectory=False, filePath=fp} = do
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig ty port) -> do h <- startRigctld fp' ty port
-                                 insert procRef (T.pack fp') h
-        Just (Rot ty port) -> do h <- startRotctld fp' ty port
-                                 insert procRef (T.pack fp') h
-        _                  -> return ()
+        Just (Rig ty port _) -> do h <- startRigctld fp' ty port
+                                   insert procRef (T.pack fp') h
+        Just (Rot ty port _) -> do h <- startRotctld fp' ty port
+                                   insert procRef (T.pack fp') h
+        _                    -> return ()
 
 handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
     devMap <- readIORef devRef
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig _ _) -> do procMap <- readIORef procRef
-                             case Map.lookup (T.pack fp') procMap of
-                                 Nothing -> return ()
-                                 Just h  -> do stopRigctld h
-                                               delete procRef (T.pack fp')
-        Just (Rot _ _) -> do procMap <- readIORef procRef
-                             case Map.lookup (T.pack fp') procMap of
-                                 Nothing -> return ()
-                                 Just h  -> do stopRotctld h
-                                               delete procRef (T.pack fp')
-        _              -> return ()
+        Just (Rig _ _ _) -> do procMap <- readIORef procRef
+                               case Map.lookup (T.pack fp') procMap of
+                                   Nothing -> return ()
+                                   Just h  -> do stopRigctld h
+                                                 delete procRef (T.pack fp')
+        Just (Rot _ _ _) -> do procMap <- readIORef procRef
+                               case Map.lookup (T.pack fp') procMap of
+                                   Nothing -> return ()
+                                   Just h  -> do stopRotctld h
+                                                 delete procRef (T.pack fp')
+        _                -> return ()
 
 handler _ _ _ = return ()
 

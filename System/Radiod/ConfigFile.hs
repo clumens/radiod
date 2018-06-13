@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module System.Radiod.ConfigFile(loadConfigFile,
@@ -10,7 +9,6 @@ import qualified Data.Map as Map
 import           Data.Maybe(mapMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import           Safe(atMay)
 import           System.Directory(doesFileExist)
 import           System.FilePath((</>))
 import           Text.Read(readMaybe)
@@ -31,15 +29,21 @@ parseConfigFile :: T.Text -> DeviceMap
 parseConfigFile str | strs <- T.lines str =
     Map.fromList $ mapMaybe parseOneLine strs
  where
-    parseOneRig :: [T.Text] -> Maybe (T.Text, Device)
-    parseOneRig l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = atMay l 3 >>= Just . T.unpack >>= readMaybe
-        Just (head l, Rig ty port)
+    parseOneRig :: [Maybe T.Text] -> Maybe (T.Text, Device)
+    parseOneRig [Just deviceNode, _, Just model, port, Just descr] =
+        readMaybe (T.unpack model) >>= \ty -> do
+            let port' = port >>= Just . T.unpack >>= readMaybe
+            Just (deviceNode, Rig ty port' descr)
 
-    parseOneRotor :: [T.Text] -> Maybe (T.Text, Device)
-    parseOneRotor l = readMaybe (T.unpack $ l !! 2) >>= \ty -> do
-        let port = atMay l 3 >>= Just . T.unpack >>= readMaybe
-        Just (head l, Rot ty port)
+    parseOneRig _ = Nothing
+
+    parseOneRotor :: [Maybe T.Text] -> Maybe (T.Text, Device)
+    parseOneRotor [Just deviceNode, _, Just model, port, Just descr] =
+        readMaybe (T.unpack model) >>= \ty -> do
+            let port' = port >>= Just . T.unpack >>= readMaybe
+            Just (deviceNode, Rot ty port' descr)
+
+    parseOneRotor _ = Nothing
 
     parseOneLine :: T.Text -> Maybe (T.Text, Device)
     parseOneLine input = let
@@ -47,8 +51,10 @@ parseConfigFile str | strs <- T.lines str =
      in
         if T.null stripped || "#" `T.isPrefixOf` stripped then Nothing
         else let
-            l = T.split (== ',') stripped
+            l = map (\x -> if T.null x then Nothing else Just x)
+                    (T.split (== ',') stripped)
          in
-            if | length l >= 3 && T.toUpper (l !! 1) == "RIG"   -> parseOneRig l
-               | length l >= 3 && T.toUpper (l !! 1) == "ROTOR" -> parseOneRotor l
-               | otherwise                                      -> Nothing
+            case l of
+                [_, Just "rig", _, _, _] -> parseOneRig l
+                [_, Just "rot", _, _, _] -> parseOneRotor l
+                _                        -> Nothing
