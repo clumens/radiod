@@ -169,32 +169,36 @@ delete ref key =
     atomicModifyIORef ref (\m -> (Map.delete key m, ()))
 
 handler :: Server -> Event -> IO ()
-handler Server{..} Created{isDirectory=False, filePath=fp} = do
+handler server@Server{..} Created{isDirectory=False, filePath=fp} = do
     devMap <- readIORef serverDeviceMap
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig ty port _) -> do h <- startRigctld fp' ty port
-                                   insert serverProcMap (T.pack fp') h
-        Just (Rot ty port _) -> do h <- startRotctld fp' ty port
-                                   insert serverProcMap (T.pack fp') h
+        Just (Rig ty port descr) -> do h <- startRigctld fp' ty port
+                                       insert serverProcMap (T.pack fp') h
+                                       broadcast server (MsgResponse $ RespRadioConnected (T.unpack descr, port))
+        Just (Rot ty port descr) -> do h <- startRotctld fp' ty port
+                                       insert serverProcMap (T.pack fp') h
+                                       broadcast server (MsgResponse $ RespRotorConnected (T.unpack descr, port))
         _                    -> return ()
 
-handler Server{..} Deleted{isDirectory=False, filePath=fp} = do
+handler server@Server{..} Deleted{isDirectory=False, filePath=fp} = do
     devMap <- readIORef serverDeviceMap
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig _ _ _) -> do procMap <- readIORef serverProcMap
-                               case Map.lookup (T.pack fp') procMap of
-                                   Nothing -> return ()
-                                   Just h  -> do stopRigctld h
-                                                 delete serverProcMap (T.pack fp')
-        Just (Rot _ _ _) -> do procMap <- readIORef serverProcMap
-                               case Map.lookup (T.pack fp') procMap of
-                                   Nothing -> return ()
-                                   Just h  -> do stopRotctld h
-                                                 delete serverProcMap (T.pack fp')
+        Just (Rig _ port descr) -> do procMap <- readIORef serverProcMap
+                                      case Map.lookup (T.pack fp') procMap of
+                                          Nothing -> return ()
+                                          Just h  -> do stopRigctld h
+                                                        delete serverProcMap (T.pack fp')
+                                                        broadcast server (MsgResponse $ RespRadioDisconnected (T.unpack descr, port))
+        Just (Rot _ port descr) -> do procMap <- readIORef serverProcMap
+                                      case Map.lookup (T.pack fp') procMap of
+                                          Nothing -> return ()
+                                          Just h  -> do stopRotctld h
+                                                        delete serverProcMap (T.pack fp')
+                                                        broadcast server (MsgResponse $ RespRotorDisconnected (T.unpack descr, port))
         _                -> return ()
 
 handler _ _ = return ()
