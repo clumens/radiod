@@ -45,7 +45,9 @@ data Client = Client { clientId :: ClientId,
                        clientSocket :: Socket,
                        clientSendChan :: TChan Message }
 
-data Server = Server { serverClients :: TVar (Map.Map ClientId Client) }
+data Server = Server { serverClients :: TVar (Map.Map ClientId Client),
+                       serverDeviceMap :: IORef DeviceMap,
+                       serverProcMap :: IORef ProcMap }
 
 -- Send a message to all connected clients.
 broadcast :: Server -> Message -> IO ()
@@ -83,6 +85,8 @@ initNetwork = do
 initServer :: IO Server
 initServer =
     Server <$> newTVarIO Map.empty
+           <*> (loadConfigFile >>= newIORef)
+           <*> newIORef Map.empty
 
 insertClient :: Server -> Client -> STM ()
 insertClient Server{..} client@Client{..} =
@@ -230,21 +234,18 @@ acceptConns sock server =
 
 program :: IO ()
 program = do
-    devMap  <- loadConfigFile >>= newIORef
-    procMap <- newIORef Map.empty
-    inotify <- initINotify
-
-    server <- initServer
-    sock   <- initNetwork
+    server@Server{..} <- initServer
+    inotify           <- initINotify
+    sock              <- initNetwork
 
     void $ do
         acceptThr <- async $ acceptConns sock server
 
         void $ installHandler sigCHLD Ignore Nothing
-        void $ installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef devMap) Nothing
+        void $ installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef serverDeviceMap) Nothing
         void $ installHandler sigTERM (CatchOnce $ cancel acceptThr) Nothing
 
-        void $ addWatch inotify [Create, Delete] "/dev" (handler procMap devMap)
+        void $ addWatch inotify [Create, Delete] "/dev" (handler serverProcMap serverDeviceMap)
 
         void $ waitCatch acceptThr
 
