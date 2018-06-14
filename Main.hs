@@ -168,36 +168,36 @@ delete :: Ord k => IORef (Map.Map k a) -> k -> IO ()
 delete ref key =
     atomicModifyIORef ref (\m -> (Map.delete key m, ()))
 
-handler :: IORef ProcMap -> IORef DeviceMap -> Event -> IO ()
-handler procRef devRef Created{isDirectory=False, filePath=fp} = do
-    devMap <- readIORef devRef
+handler :: Server -> Event -> IO ()
+handler Server{..} Created{isDirectory=False, filePath=fp} = do
+    devMap <- readIORef serverDeviceMap
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
         Just (Rig ty port _) -> do h <- startRigctld fp' ty port
-                                   insert procRef (T.pack fp') h
+                                   insert serverProcMap (T.pack fp') h
         Just (Rot ty port _) -> do h <- startRotctld fp' ty port
-                                   insert procRef (T.pack fp') h
+                                   insert serverProcMap (T.pack fp') h
         _                    -> return ()
 
-handler procRef devRef Deleted{isDirectory=False, filePath=fp} = do
-    devMap <- readIORef devRef
+handler Server{..} Deleted{isDirectory=False, filePath=fp} = do
+    devMap <- readIORef serverDeviceMap
     let fp' = "/dev" </> C8.unpack fp
 
     case Map.lookup (T.pack fp') devMap of
-        Just (Rig _ _ _) -> do procMap <- readIORef procRef
+        Just (Rig _ _ _) -> do procMap <- readIORef serverProcMap
                                case Map.lookup (T.pack fp') procMap of
                                    Nothing -> return ()
                                    Just h  -> do stopRigctld h
-                                                 delete procRef (T.pack fp')
-        Just (Rot _ _ _) -> do procMap <- readIORef procRef
+                                                 delete serverProcMap (T.pack fp')
+        Just (Rot _ _ _) -> do procMap <- readIORef serverProcMap
                                case Map.lookup (T.pack fp') procMap of
                                    Nothing -> return ()
                                    Just h  -> do stopRotctld h
-                                                 delete procRef (T.pack fp')
+                                                 delete serverProcMap (T.pack fp')
         _                -> return ()
 
-handler _ _ _ = return ()
+handler _ _ = return ()
 
 --
 -- DAEMON STUFF
@@ -245,7 +245,7 @@ program = do
         void $ installHandler sigHUP  (Catch $ loadConfigFile >>= atomicWriteIORef serverDeviceMap) Nothing
         void $ installHandler sigTERM (CatchOnce $ cancel acceptThr) Nothing
 
-        void $ addWatch inotify [Create, Delete] "/dev" (handler serverProcMap serverDeviceMap)
+        void $ addWatch inotify [Create, Delete] "/dev" (handler server)
 
         void $ waitCatch acceptThr
 
