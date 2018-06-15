@@ -13,6 +13,7 @@ import qualified Data.ByteString.Char8 as C8
 import           Data.IORef(IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.Int(Int64)
 import qualified Data.Map as Map
+import           Data.Maybe(mapMaybe)
 import           Data.Serialize(decode, encode)
 import qualified Data.Text as T
 import           Network(Socket)
@@ -49,6 +50,14 @@ data Server = Server { serverClients :: TVar (Map.Map ClientId Client),
                        serverDeviceMap :: IORef DeviceMap,
                        serverProcMap :: IORef ProcMap }
 
+isRadio :: Device -> Bool
+isRadio (Rig _ _ _) = True
+isRadio _           = False
+
+isRotor :: Device -> Bool
+isRotor (Rot _ _ _) = True
+isRotor _           = False
+
 -- Send a message to all connected clients.
 broadcast :: Server -> Message -> IO ()
 broadcast Server{..} msg = do
@@ -62,8 +71,32 @@ deleteClient Server{..} Client{..} =
 
 -- Do whatever the request wants, turning it into a Response message (or an error).
 -- This does not send anything to the client.
-handleRequest :: Message -> IO Message
-handleRequest _ =
+handleRequest :: Server -> Message -> IO Message
+handleRequest Server{..} (MsgRequest ReqAllConnectedRadios) = do
+    deviceMap   <- readIORef serverDeviceMap
+    activeNodes <- Map.keys <$> readIORef serverProcMap
+
+    -- devs will contain all currently connected devices known by the config file, both
+    -- radios and rotors.  We need to filter it down to just radios.
+    let devs   = mapMaybe (flip Map.lookup deviceMap) activeNodes
+        retval = map (\(Rig _ port descr) -> (T.unpack descr, port))
+                     (filter isRadio devs)
+
+    return $ MsgResponse $ RespAllConnectedRadios retval
+
+handleRequest Server{..} (MsgRequest ReqAllConnectedRotors) = do
+    deviceMap   <- readIORef serverDeviceMap
+    activeNodes <- Map.keys <$> readIORef serverProcMap
+
+    -- devs will contain all currently connected devices known by the config file, both
+    -- radios and rotors.  We need to filter it down to just rotors.
+    let devs   = mapMaybe (flip Map.lookup deviceMap) activeNodes
+        retval = map (\(Rot _ port descr) -> (T.unpack descr, port))
+                     (filter isRotor devs)
+
+    return $ MsgResponse $ RespAllConnectedRotors retval
+
+handleRequest _ _ =
     return $ MsgResponse RespError
 
 initClient :: ClientId -> Socket -> IO Client
@@ -104,13 +137,13 @@ serve server@Server{..} ident sock = do
 
 -- Handle the network traffic for a single client.
 serveLoop :: Server -> Client -> IO ()
-serveLoop Server{..} Client{..} = do
+serveLoop server@Server{..} Client{..} = do
     -- This thread handles reading traffic from the network for a single client.
     -- It then processes the Request message and puts it into the channel for the
     -- client.  This channel is not the network - it's a way of communicating
     -- between threads in this server.
     let rx = forever $ decode <$> recv clientSocket 1024 >>= \case
-            Right msg -> handleRequest msg >>= atomically . writeTChan clientSendChan
+            Right msg -> handleRequest server msg >>= atomically . writeTChan clientSendChan
 
             -- There was an error decoding the received message, but the client is
             -- expecting something in return, so we hav eto give it something to read.
